@@ -93,6 +93,12 @@ def print_stacktrace(thread):
         frame.GetDescription(out)
         sys.stdout.write(' ' * 4 + out.GetData())
 
+def save_core_dump(process):
+    # Save core dump with stack only style and auto generated name by process id and current time
+    core_file_name = '/tmp/mini-core-{0}-{1}.dmp'.format(process.GetProcessID(), time.strftime('%Y%m%d-%H%M%S'))
+    process.SaveCore(core_file_name, '', lldb.eSaveCoreStackOnly)
+    sys.stdout.write('\\nCORE_DUMP_SAVED into {0}\\n'.format(core_file_name))
+
 def autoexit_command(debugger, command, result, internal_dict):
     global listener
     process = debugger.GetSelectedTarget().process
@@ -155,7 +161,6 @@ def autoexit_command(debugger, command, result, internal_dict):
         
             if type & lldb.SBProcess.eBroadcastBitSTDERR:
                 ProcessSTDERR()
-    
         else:
             state = process.GetState()
 
@@ -165,16 +170,24 @@ def autoexit_command(debugger, command, result, internal_dict):
             ProcessSTDERR()
 
         if state == lldb.eStateExited:
-            sys.stdout.write( '\\nPROCESS_EXITED\\n' )
+            exit_status = process.GetExitStatus()
+            exit_des = process.GetExitDescription()
+            if exit_des:
+                sys.stdout.write( '\\nPROCESS_EXITED: status: {0} des: {1}\\n'.format(exit_status, exit_des))
+            else:
+                sys.stdout.write( '\\nPROCESS_EXITED: status: {0}\\n'.format(exit_status))
+            if exit_status != 0:
+                save_core_dump(process)
             CloseOut()
-            os._exit(process.GetExitStatus())
+            os._exit(exit_status)
         elif printBacktraceTime is None and state == lldb.eStateStopped:
             haveException = False
             allThreads = process.get_process_thread_list()
             for thread in allThreads:
-                if(thread.GetStopReason() == lldb.eStopReasonException):
+                if(thread.GetStopReason() == lldb.eStopReasonException or thread.GetStopReason() == lldb.eStopReasonSignal):
                     haveException = True
                     print_stacktrace(thread)
+                    save_core_dump(process)
             if haveException == False:
                 selectedThread = process.GetSelectedThread()
                 if selectedThread.GetStopReason() == lldb.eStopReasonNone:
@@ -183,12 +196,14 @@ def autoexit_command(debugger, command, result, internal_dict):
                     continue
                 else:
                     print_stacktrace(selectedThread)
+                    save_core_dump(process)
             sys.stdout.write( '\\nPROCESS_STOPPED\\n' )
             CloseOut()
             os._exit({exitcode_app_crash})
         elif state == lldb.eStateCrashed:
             sys.stdout.write( '\\nPROCESS_CRASHED\\n' )
             print_stacktrace(process.GetSelectedThread())
+            save_core_dump(process)
             CloseOut()
             os._exit({exitcode_app_crash})
         elif state == lldb.eStateDetached:
