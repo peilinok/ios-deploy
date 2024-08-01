@@ -102,16 +102,22 @@ def print_backtrace_all(process):
     except Exception as e:
         sys.stdout.write('\\nBACKTRACE_ERROR : {0}\\n'.format(e))
 
-def save_core_dump(process):
+def save_core_dump(process, core_dump_file_path):
     try:
+        core_file_name = '/tmp'
+        if core_dump_file_path and core_dump_file_path != '':
+            core_file_name = core_dump_file_path
         # Save core dump with stack only style and auto generated name by process id and current time
-        core_file_name = '/tmp/mini-core-{0}-{1}.dmp'.format(process.GetProcessID(), time.strftime('%Y%m%d-%H%M%S'))
+        core_file_name = '{0}/mini-core-{1}-{2}.dmp'.format(core_file_name, process.GetProcessID(), time.strftime('%Y%m%d-%H%M%S'))
         process.SaveCore(core_file_name, '', lldb.eSaveCoreStackOnly)
         sys.stdout.write('\\nCORE_DUMP_SAVED into : {0}\\n'.format(core_file_name))
     except Exception as e:
         sys.stdout.write('\\nCORE_DUMP_SAVE_ERROR : {0}\\n'.format(e))
 
 def autoexit_command(debugger, command, result, internal_dict):
+    for entry in debugger.GetSelectedTarget().GetEnvironment().GetEntries():
+        print(entry)
+
     global listener
     process = debugger.GetSelectedTarget().process
     if not startup_error.Success():
@@ -130,6 +136,8 @@ def autoexit_command(debugger, command, result, internal_dict):
 
     detectDeadlockTimeout = {detect_deadlock_timeout}
     printBacktraceTime = time.time() + detectDeadlockTimeout if detectDeadlockTimeout > 0 else None
+
+    coreDumpFilePath = {core_dump_file_path}
     
     # This line prevents internal lldb listener from processing STDOUT/STDERR/StateChanged messages.
     # Without it, an order of log writes is incorrect sometimes
@@ -206,7 +214,7 @@ def autoexit_command(debugger, command, result, internal_dict):
                     print_backtrace_all(process)
                     sys.stdout.write( '\\n=======================================================================================================\\n' )
                     sys.stdout.write( '\\n')
-                    save_core_dump(process)
+                    save_core_dump(process, coreDumpFilePath)
             if haveException == False:
                 selectedThread = process.GetSelectedThread()
                 if selectedThread.GetStopReason() == lldb.eStopReasonNone:
@@ -215,14 +223,14 @@ def autoexit_command(debugger, command, result, internal_dict):
                     continue
                 else:
                     print_backtrace_all(process)
-                    save_core_dump(process)
+                    save_core_dump(process, coreDumpFilePath)
             sys.stdout.write( '\\nPROCESS_STOPPED\\n' )
             CloseOut()
             os._exit({exitcode_app_crash})
         elif state == lldb.eStateCrashed:
             sys.stdout.write( '\\nPROCESS_CRASHED\\n' )
             print_backtrace_all(process)
-            save_core_dump(process)
+            save_core_dump(process, coreDumpFilePath)
             CloseOut()
             os._exit({exitcode_app_crash})
         elif state == lldb.eStateDetached:

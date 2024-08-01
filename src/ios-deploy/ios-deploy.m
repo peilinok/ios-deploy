@@ -132,6 +132,7 @@ char *profile_path = NULL;
 int command_pid = -1;
 int _timeout = 0;
 int _detectDeadlockTimeout = 0;
+char *core_dump_file_path = NULL;
 bool _json_output = false;
 NSMutableArray *_file_meta_info = nil;
 int port = 0;    // 0 means "dynamically assigned"
@@ -1022,6 +1023,16 @@ void write_lldb_prep_cmds(AMDeviceRef device, CFURLRef disk_app_url) {
     CFStringFindAndReplace(pmodule, CFSTR("{detect_deadlock_timeout}"), detect_deadlock_timeout_str, rangeLLDB, 0);
     CFRelease(detect_deadlock_timeout_str);
     rangeLLDB.length = CFStringGetLength(pmodule);
+
+    if(core_dump_file_path) {
+        CFStringRef core_dump_file_path_str = CFStringCreateWithFormat(NULL, NULL, CFSTR("\"%s\""), core_dump_file_path);
+        CFStringFindAndReplace(pmodule, CFSTR("{core_dump_file_path}"), core_dump_file_path_str, rangeLLDB, 0);
+        rangeLLDB.length = CFStringGetLength(pmodule);
+        CFRelease(core_dump_file_path_str);
+    } else {
+        CFStringFindAndReplace(pmodule, CFSTR("{core_dump_file_path}"), CFSTR("\"\""), rangeLLDB, 0);
+        rangeLLDB.length = CFStringGetLength(pmodule);
+    }
 
     if (args) {
         CFStringRef cf_args = CFStringCreateWithCString(NULL, args, kCFStringEncodingUTF8);
@@ -3561,6 +3572,7 @@ void usage(const char* app) {
 #if defined(IOS_DEPLOY_FEATURE_DEVELOPER_MODE)
         @"  --check-developer-mode       checks whether the given device has developer mode enabled (requires Xcode 14 or newer)\n"
 #endif
+        @"  --core_dump_file_path <core_dump_file_path>  specify the auto saved core dump file path\n"
         ,
         [NSString stringWithUTF8String:app]);
 }
@@ -3634,6 +3646,7 @@ int main(int argc, char *argv[]) {
         { "get_pid", no_argument, NULL, 1010},
         { "pid", required_argument, NULL, 1011},
         { "kill", no_argument, NULL, 1012},
+        { "core_dump_file_path", required_argument, NULL, 1013 },
         { NULL, 0, NULL, 0 },
     };
     int ch;
@@ -3837,6 +3850,9 @@ int main(int argc, char *argv[]) {
         case 1012:
             command_only = true;
             command = "kill_app";
+            break;
+        case 1013:
+            core_dump_file_path = optarg;
             break;
         default:
             usage(argv[0]);
