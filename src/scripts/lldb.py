@@ -107,6 +107,10 @@ def save_core_dump(process, core_dump_file_path):
         core_file_name = '/tmp'
         if core_dump_file_path and core_dump_file_path != '':
             core_file_name = core_dump_file_path
+
+        if not os.path.exists(core_file_name):
+            os.makedirs(core_file_name)
+            print('mkdirs {0} success!'.format(core_file_name))
         # Save core dump with stack only style and auto generated name by process id and current time
         core_file_name = '{0}/mini-core-{1}-{2}.dmp'.format(core_file_name, process.GetProcessID(), time.strftime('%Y%m%d-%H%M%S'))
         process.SaveCore(core_file_name, '', lldb.eSaveCoreStackOnly)
